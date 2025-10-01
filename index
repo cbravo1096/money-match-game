@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Money Match Game</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Bubblegum Sans font (Body/General Text) -->
+    <link href="https://fonts.googleapis.com/css2?family=Bubblegum+Sans&display=swap" rel="stylesheet">
+    <!-- Load Luckiest Guy font (Heading) -->
+    <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&display=swap" rel="stylesheet">
+    <style>
+        /* Define custom colors and font from user request */
+        :root {
+            --color-green: #63bc47;
+            --color-blue: #0577b0;
+            --color-red: #ea424e;
+            --color-dark-blue: #003d5c;
+        }
+
+        /* Paw print pattern background (CSS gradient for robustness) */
+        .paw-print-bg {
+            background-color: #f3f4f6; /* Light base */
+            background-image: 
+                radial-gradient(circle at 20% 20%, rgba(5, 119, 176, 0.1) 3px, transparent 0),
+                radial-gradient(circle at 80% 80%, rgba(5, 119, 176, 0.1) 3px, transparent 0),
+                radial-gradient(circle at 50% 50%, rgba(5, 119, 176, 0.05) 5px, transparent 0);
+            background-size: 100px 100px; /* Repeating pattern size */
+        }
+
+        /* General styling and font application */
+        body {
+            font-family: 'Bubblegum Sans', cursive;
+        }
+        
+        /* Heading Font Override */
+        #main-heading {
+            font-family: 'Luckiest Guy', cursive;
+            text-shadow: 3px 3px var(--color-dark-blue); /* Add some depth to the title */
+            line-height: 1;
+        }
+
+        /* Sparkle Animation Keyframes */
+        @keyframes sparkle-glow {
+            0% { box-shadow: 0 0 10px 0 var(--color-red), 0 0 0 5px var(--color-red); }
+            50% { box-shadow: 0 0 30px 5px var(--color-red), 0 0 0 5px var(--color-red); }
+            100% { box-shadow: 0 0 10px 0 var(--color-red), 0 0 0 5px var(--color-red); }
+        }
+
+        /* Custom styles for the game board and cards */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr); /* 4 columns for 16 cards */
+            gap: 1rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .card {
+            aspect-ratio: 1 / 1; /* Ensures cards are square */
+            perspective: 1000px;
+            cursor: pointer;
+            transition: transform 0.6s, box-shadow 0.2s;
+            transform-style: preserve-3d;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Class applied during the match animation */
+        .sparkle {
+            animation: sparkle-glow 0.6s ease-out;
+        }
+
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            font-weight: bold;
+            border-radius: 0.75rem;
+            user-select: none;
+            padding: 0.5rem;
+            border: 4px solid;
+            box-sizing: border-box; 
+        }
+
+        /* Back face (Dollar Dog Logo) */
+        .card-back {
+            background-color: var(--color-blue);
+            color: white;
+            transform: rotateY(0deg);
+            border-color: var(--color-dark-blue);
+        }
+
+        /* Front face base (for numerical values) */
+        .card-front {
+            background-color: #ffffff; /* Default white background */
+            color: #1f2937; /* Dark text */
+            transform: rotateY(180deg);
+            border-color: #d1d5db;
+        }
+        
+        /* State when card is flipped */
+        .flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        /* State when card is matched */
+        .matched .card-inner {
+            transform: rotateY(180deg) scale(0.95);
+            opacity: 0.7;
+            pointer-events: none;
+        }
+        
+        /* --- THEME CLASSES FOR VALUE CARDS (Only used by Bills now) --- */
+
+        /* Styling for the numerical value side of the BILL cards */
+        .bill-value-front {
+            background-color: #d1fae5; /* Very light mint green for bill value (matches Tailwind's green-200) */
+            color: var(--color-dark-blue); 
+            border-color: var(--color-green);
+            font-size: 2.5rem; 
+            padding: 1rem;
+        }
+        
+        /* --- CONFETTI STYLES --- */
+        #confetti-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 100;
+        }
+
+        /* Confetti Particle Animation */
+        @keyframes fall {
+            0% { transform: translate(0, -100px) rotate(0deg); opacity: 1; }
+            100% { transform: translate(var(--x-end), var(--y-end)) rotate(720deg); opacity: 0; }
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 640px) {
+            .card-grid {
+                grid-template-columns: repeat(4, 1fr); 
+                gap: 0.5rem;
+            }
+            .card-face {
+                font-size: 0.8rem;
+                padding: 0.25rem;
+            }
+        }
+    </style>
+</head>
+<body class="paw-print-bg min-h-screen p-4 flex flex-col font-sans">
+
+    <div class="container mx-auto">
+        <header class="text-center mb-8">
+            <h1 id="main-heading" class="text-6xl mb-2 text-white" style="color: var(--color-red);">Money Match!</h1>
+            <!-- UPDATED DIRECTIONS -->
+            <p class="text-gray-700 text-lg">Help Dollar Dog find coins and bills by making matches.</p>
+        </header>
+
+        <!-- Game Info Dashboard -->
+        <div class="flex justify-center items-center gap-8 mb-8 p-4 bg-white rounded-xl shadow-lg max-w-lg mx-auto border-4 border-gray-200">
+            <div class="text-center">
+                <p class="text-sm text-gray-500">Moves</p>
+                <p id="moves" class="text-3xl font-bold" style="color: var(--color-blue);">0</p>
+            </div>
+            <div class="text-center">
+                <p class="text-sm text-gray-500">Matches</p>
+                <p id="matched-count" class="text-3xl font-bold" style="color: var(--color-green);">0 / 8</p>
+            </div>
+            <button id="restart-button" class="font-semibold py-3 px-6 rounded-full shadow-md transition duration-300 transform hover:scale-105 text-white" style="background-color: var(--color-green); box-shadow: 0 4px var(--color-dark-blue);">
+                Restart Game
+            </button>
+        </div>
+
+        <!-- The main card grid will be rendered here -->
+        <div id="game-board" class="card-grid">
+            <!-- Cards will be inserted by JavaScript -->
+        </div>
+
+        <!-- Game Over Modal/Message Box (Hidden initially) -->
+        <div id="game-message" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
+            <div class="bg-white p-8 rounded-xl shadow-2xl text-center max-w-sm w-full transform transition duration-300">
+                <h2 id="message-title" class="text-3xl font-bold" style="color: var(--color-red);"></h2>
+                <p id="message-text" class="text-gray-700 mb-6 text-lg"></p>
+                <button id="close-message" class="font-semibold py-2 px-6 rounded-full transition duration-300 text-white" style="background-color: var(--color-green);">
+                    Play Again
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Confetti Container (Triggers animation) -->
+    <div id="confetti-container"></div>
+
+    <script>
+        // --- Game Setup ---
+        const coinVisuals = {
+            '0': '<div class="rounded-full w-2/3 h-2/3 bg-amber-800 text-white flex items-center justify-center text-4xl font-black shadow-inner border-4 border-amber-900">1¢</div>', // Penny
+            '1': '<div class="rounded-full w-2/3 h-2/3 bg-gray-500 text-gray-900 flex items-center justify-center text-4xl font-black shadow-inner border-4 border-gray-600">5¢</div>', // Nickel
+            '2': '<div class="rounded-full w-2/3 h-2/3 bg-gray-400 text-gray-800 flex items-center justify-center text-4xl font-black shadow-inner border-4 border-gray-500">10¢</div>', // Dime
+            '3': '<div class="rounded-full w-2/3 h-2/3 bg-gray-600 text-white flex items-center justify-center text-4xl font-black shadow-inner border-4 border-gray-700">25¢</div>' // Quarter
+        };
+
+        const cardPairs = [
+            // id: 0-3 are Coins, id: 4-7 are Bills.
+            
+            // COINS: Both cards in the pair use the same coin graphic.
+            { id: 0, visual: coinVisuals['0'], value: coinVisuals['0'] }, // Penny Pair
+            { id: 1, visual: coinVisuals['1'], value: coinVisuals['1'] }, // Nickel Pair
+            { id: 2, visual: coinVisuals['2'], value: coinVisuals['2'] }, // Dime Pair
+            { id: 3, visual: coinVisuals['3'], value: coinVisuals['3'] }, // Quarter Pair
+            
+            // BILLS: Both cards use $X.00 text, ensuring visual consistency.
+            { id: 4, visual: '<div class="w-full h-full bg-green-200 text-green-800 flex items-center justify-center rounded-lg shadow-xl border-4 border-[var(--color-green)] p-2"><span class="text-4xl font-extrabold">$1.00</span></div>', value: "$1.00" },
+            { id: 5, visual: '<div class="w-full h-full bg-green-200 text-green-900 flex items-center justify-center rounded-lg shadow-xl border-4 border-[var(--color-green)] p-2"><span class="text-4xl font-extrabold">$5.00</span></div>', value: "$5.00" },
+            { id: 6, visual: '<div class="w-full h-full bg-green-200 text-green-900 flex items-center justify-center rounded-lg shadow-xl border-4 border-[var(--color-green)] p-2"><span class="text-4xl font-extrabold">$10.00</span></div>', value: "$10.00" },
+            { id: 7, visual: '<div class="w-full h-full bg-green-200 text-green-900 flex items-center justify-center rounded-lg shadow-xl border-4 border-[var(--color-green)] p-2"><span class="text-4xl font-extrabold">$20.00</span></div>', value: "$20.00" },
+        ];
+
+        let gameBoard = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let moves = 0;
+        let isProcessing = false; 
+
+        // DOM elements
+        const boardElement = document.getElementById('game-board');
+        const movesElement = document.getElementById('moves');
+        const matchedCountElement = document.getElementById('matched-count');
+        const restartButton = document.getElementById('restart-button');
+        const messageBox = document.getElementById('game-message');
+        const messageTitle = document.getElementById('message-title');
+        const messageText = document.getElementById('message-text');
+        const closeMessageButton = document.getElementById('close-message');
+        const confettiContainer = document.getElementById('confetti-container');
+        const COLORS = ['var(--color-red)', 'var(--color-green)', 'var(--color-blue)', '#ffeb3b', '#ffffff']; // Added yellow and white for pop
+
+        /**
+         * Shuffles an array in place using the Fisher-Yates algorithm.
+         * @param {Array} array The array to shuffle.
+         */
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+        
+        /**
+         * Generates and launches confetti particles from the center of the screen.
+         */
+        function shootConfetti() {
+            const count = 30; 
+            
+            for (let i = 0; i < count; i++) {
+                const particle = document.createElement('div');
+                
+                // Randomize color and size
+                const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+                const size = Math.random() * 8 + 4; // 4px to 12px
+                
+                // Set initial position (center of the window)
+                const startX = window.innerWidth / 2;
+                const startY = window.innerHeight / 2;
+                
+                // Randomize trajectory (using CSS variables for keyframe)
+                const xEnd = (Math.random() - 0.5) * window.innerWidth;
+                const yEnd = window.innerHeight * 0.8 + Math.random() * 200; // Fall downwards
+                const duration = Math.random() * 2 + 1.5; // 1.5s to 3.5s
+
+                particle.style.cssText = `
+                    position: absolute;
+                    width: ${size}px;
+                    height: ${size}px;
+                    background-color: ${color};
+                    border-radius: ${Math.random() > 0.5 ? '50%' : '0'}; /* Mix of squares and circles */
+                    left: ${startX}px;
+                    top: ${startY}px;
+                    animation: fall ${duration}s ease-out forwards;
+                    --x-end: ${xEnd}px;
+                    --y-end: ${yEnd}px;
+                `;
+
+                confettiContainer.appendChild(particle);
+
+                // Clean up particle after animation ends
+                setTimeout(() => {
+                    particle.remove();
+                }, duration * 1000);
+            }
+        }
+
+        /**
+         * Initializes the game board by creating and shuffling the cards.
+         */
+        function initializeBoard() {
+            gameBoard = [];
+            
+            // Create the full set of cards (2 for each pair)
+            cardPairs.forEach((pair) => {
+                // Card 1: Visual/Value 1
+                const isVisual1 = pair.id < 4 ? true : true; 
+                
+                gameBoard.push({
+                    id: pair.id,
+                    content: pair.visual,
+                    isFlipped: false,
+                    isMatched: false,
+                    isVisual: isVisual1 
+                });
+                
+                // Card 2: Visual/Value 2
+                // For bills, this side is the value, so isVisual=false. For coins, both sides are visual, so isVisual=true.
+                const isVisual2 = pair.id < 4 ? true : false; 
+                
+                gameBoard.push({
+                    id: pair.id, // Same ID links the pair
+                    content: pair.value,
+                    isFlipped: false,
+                    isMatched: false,
+                    isVisual: isVisual2 
+                });
+            });
+
+            // Randomly shuffle the board
+            shuffle(gameBoard);
+        }
+
+        /**
+         * Renders the current state of the game board to the DOM.
+         */
+        function renderBoard() {
+            boardElement.innerHTML = ''; // Clear existing cards
+            
+            // External image URL for the card back logo
+            const dollarDogLogoUrl = 'https://dollardogkidsclub.com/wp-content/uploads/2023/06/dollar-dog-favicon.png';
+
+            gameBoard.forEach((card, index) => {
+                const cardElement = document.createElement('div');
+                cardElement.classList.add('card'); 
+
+                // Conditionally add 'flipped' and 'matched' classes
+                if (card.isFlipped) {
+                    cardElement.classList.add('flipped');
+                }
+                if (card.isMatched) {
+                    cardElement.classList.add('matched');
+                }
+                // Check if card is currently sparkling (class added in checkMatch)
+                if (card.isSparkling) {
+                    cardElement.classList.add('sparkle');
+                }
+
+                cardElement.dataset.index = index;
+                cardElement.onclick = () => handleCardClick(index);
+
+                // --- LOGIC TO APPLY THEME-CONSISTENT STYLES TO VALUE CARDS ---
+                let frontClass = '';
+                
+                if (card.id < 4) {
+                    // Coins: Both sides now use the coin graphic (handled by content) and plain card-front style
+                    frontClass = 'p-1';
+                } else if (card.isVisual) {
+                    // Bills - Visual Side: uses inline styling in cardPairs, just needs small padding
+                    frontClass = 'p-1'; 
+                } else {
+                    // Bills - Numerical Value Side ($X.00): gets the special green styling
+                    frontClass = 'bill-value-front'; 
+                }
+                // --- END LOGIC ---
+                
+                cardElement.innerHTML = `
+                    <div class="card-inner">
+                        <!-- FRONT FACE: Shows the visual/value. -->
+                        <div class="card-face card-front ${frontClass}">
+                            ${card.content}
+                        </div>
+                        <!-- BACK FACE: Shows the Dollar Dog Logo (External Image) -->
+                        <div class="card-face card-back flex-col p-4">
+                             <!-- NOTE: This external image may not load due to sandbox restrictions, but we use an onerror fallback. -->
+                            <img src="${dollarDogLogoUrl}" alt="Dollar Dog Logo" class="w-3/4 h-3/4 object-contain" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                            <!-- Fallback/Alternative Text Logo if image fails -->
+                            <div class="hidden flex-col text-center justify-center h-full">
+                                <span class="text-3xl font-extrabold text-yellow-300 leading-none" style="text-shadow: 2px 2px var(--color-dark-blue);">Dollar Dog</span>
+                                <span class="text-lg font-bold px-3 py-1 rounded-lg shadow-md mt-2" style="background-color: var(--color-green);">Kids Club</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                boardElement.appendChild(cardElement);
+            });
+
+            movesElement.textContent = moves;
+            matchedCountElement.textContent = `${matchedPairs} / ${cardPairs.length}`;
+        }
+
+        /**
+         * Handles the click event on a card.
+         * @param {number} index The index of the clicked card in the gameBoard array.
+         */
+        function handleCardClick(index) {
+            // Prevent interaction while an action is processing or if the card is already flipped/matched
+            if (isProcessing || gameBoard[index].isFlipped || gameBoard[index].isMatched) {
+                return;
+            }
+
+            // Flip the card
+            gameBoard[index].isFlipped = true;
+            flippedCards.push(index);
+            renderBoard();
+
+            // Check if two cards have been flipped
+            if (flippedCards.length === 2) {
+                moves++;
+                isProcessing = true; // Lock the board
+
+                // Short delay so the user can see the second card before match logic runs
+                setTimeout(checkMatch, 300); 
+            }
+        }
+
+        /**
+         * Compares the two flipped cards to see if they are a match.
+         */
+        function checkMatch() {
+            const [index1, index2] = flippedCards;
+            const card1 = gameBoard[index1];
+            const card2 = gameBoard[index2];
+            
+            // Clear flipped cards array now that we have the indices
+            flippedCards = []; 
+
+            // Matching logic: IDs must be the same AND (for coins, they must be two different cards OR for bills, they must have different visual settings)
+            let isMatch = false;
+
+            if (card1.id < 4) { // Coin Logic: Match if IDs are same (since both are now visual)
+                isMatch = card1.id === card2.id;
+            } else { // Bill Logic: Match if IDs are same AND one is visual and one is value
+                isMatch = card1.id === card2.id && card1.isVisual !== card2.isVisual;
+            }
+
+            if (isMatch) {
+                // IT'S A MATCH!
+                matchedPairs++;
+                
+                // *** NEW: Trigger Confetti! ***
+                shootConfetti(); 
+
+                // Set sparkling state for animation and re-render
+                card1.isSparkling = true;
+                card2.isSparkling = true;
+                renderBoard();
+
+                // Wait for sparkle animation (600ms)
+                setTimeout(() => {
+                    // Turn off sparkle, set to matched state, and unlock board
+                    card1.isSparkling = false;
+                    card2.isSparkling = false;
+                    card1.isMatched = true;
+                    card2.isMatched = true;
+                    
+                    isProcessing = false; // Unlock board
+                    renderBoard(); 
+                    
+                    // Check for game over
+                    if (matchedPairs === cardPairs.length) {
+                        showGameMessage(
+                            "You Won!", 
+                            `Fantastic! You found all 8 matches in ${moves} moves.`
+                        );
+                    }
+                }, 600); 
+
+            } else {
+                // NOT A MATCH, wait 1 second and flip back
+                setTimeout(() => {
+                    card1.isFlipped = false;
+                    card2.isFlipped = false;
+                    isProcessing = false; // Unlock board
+                    renderBoard();
+                }, 1000);
+            }
+        }
+
+        /**
+         * Displays a message modal.
+         * @param {string} title The title of the message.
+         * @param {string} text The body text of the message.
+         */
+        function showGameMessage(title, text) {
+            messageTitle.textContent = title;
+            messageText.textContent = text;
+            messageBox.classList.remove('hidden');
+            messageBox.classList.add('flex');
+        }
+
+        /**
+         * Hides the message modal.
+         */
+        function hideGameMessage() {
+            messageBox.classList.remove('flex');
+            messageBox.classList.add('hidden');
+        }
+
+        /**
+         * Resets all game state variables and starts a new game.
+         */
+        function startGame() {
+            flippedCards = [];
+            matchedPairs = 0;
+            moves = 0;
+            isProcessing = false;
+            hideGameMessage();
+            initializeBoard();
+            renderBoard();
+        }
+
+        // --- Event Listeners and Initialization ---
+        
+        // Start a new game when the page loads
+        window.onload = startGame; 
+        
+// Restart button functionality
+        restartButton.addEventListener('click', startGame);
+
+        // Close message/Play Again button functionality
+        closeMessageButton.addEventListener('click', startGame);
+
+    </script>
+</body>
+</html>
